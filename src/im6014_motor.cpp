@@ -7,34 +7,34 @@
 namespace unitree {
 namespace IM6014 {
 
-IM6014Motor::IM6014Motor() {}
-IM6014Motor::~IM6014Motor() { close(); }
+Motor::Motor() {}
+Motor::~Motor() { close(); }
 
-bool IM6014Motor::init(const std::string &port, int baudrate) {
+bool Motor::init(const std::string &port, int baudrate) {
   return serial_.open(port, baudrate);
 }
-void IM6014Motor::close() { serial_.close(); }
+void Motor::close() { serial_.close(); }
 
-void IM6014Motor::prepare_tx(ControlData_t &tx, uint8_t id, float torque,
+void Motor::prepare_tx(ControlData_t &tx, uint8_t id, float torque,
                              float speed, float position, float kp,
                              float kd, uint8_t status, uint8_t timeout) {
-  std::memset(&tx, 0, sizeof(tx));
   tx.head[0] = 0xFE;
   tx.head[1] = 0xEE;
+  tx.res = 0;
   pack_tx(tx, id, status, timeout);
 
-  // Êä³ö¶Ë ¡ú ×ª×Ó¶Ë ¡ú Ð­ÒéÕûÊýÖµ
+  // ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ×ªï¿½Ó¶ï¿½ ï¿½ï¿½ Ð­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
   tx.tor_des = encode_torque(torque);
   tx.spd_des = encode_speed(speed);
   tx.pos_des = encode_position(position);
   tx.k_pos = encode_kp(kp);
   tx.k_spd = encode_kd(kd);
 
-  // CRC: ·¢ËÍ°ü°üº¬°üÍ·£¬¹²16×Ö½Ú
+  // CRC: ï¿½ï¿½ï¿½Í°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½16ï¿½Ö½ï¿½
   tx.CRC32 = crc32_mpeg2((uint8_t *)&tx, 16);
 }
 
-bool IM6014Motor::send_cmd(uint8_t id, float torque, float speed,
+bool Motor::send_cmd(uint8_t id, float torque, float speed,
                            float position, float kp, float kd,
                            uint8_t status, uint8_t timeout) {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -44,14 +44,14 @@ bool IM6014Motor::send_cmd(uint8_t id, float torque, float speed,
   return serial_.write((uint8_t *)&tx, sizeof(tx)) == sizeof(tx);
 }
 
-bool IM6014Motor::verify_rx_crc(const MotorData_t &rx) {
-  // ½ÓÊÕ°ü CRC: ²»°üº¬°üÍ·(Ìø¹ýÇ°2×Ö½Ú)£¬¹²20×Ö½Ú
+bool Motor::verify_rx_crc(const MotorData_t &rx) {
+  // ï¿½ï¿½ï¿½Õ°ï¿½ CRC: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·(ï¿½ï¿½ï¿½ï¿½Ç°2ï¿½Ö½ï¿½)ï¿½ï¿½ï¿½ï¿½20ï¿½Ö½ï¿½
   uint32_t calc_crc = crc32_mpeg2((uint8_t *)&rx + 2, 20);
   return calc_crc == rx.CRC32;
 }
 
-// ? ºËÐÄÐÞ¸Ä£º½«×ª×Ó¶ËÐ­ÒéÖµ½âÂëÎªÊä³ö¶ËÎïÀíÁ¿
-bool IM6014Motor::recv_state(uint8_t id, IM6014State &state, int timeout_ms) {
+// ? ï¿½ï¿½ï¿½ï¿½ï¿½Þ¸Ä£ï¿½ï¿½ï¿½×ªï¿½Ó¶ï¿½Ð­ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+bool Motor::recv_state(uint8_t id, State &state, int timeout_ms) {
   std::lock_guard<std::mutex> lock(mutex_);
   uint8_t buffer[64];
   int bytes_read = serial_.read(buffer, sizeof(buffer), timeout_ms);
@@ -71,9 +71,9 @@ bool IM6014Motor::recv_state(uint8_t id, IM6014State &state, int timeout_ms) {
           state.timeout = get_rx_timeout(rx);
           state.temp1 = rx.temp1;
           state.temp2 = rx.temp2;
-          state.voltage = rx.vol * 0.5f; // µçÑ¹»»Ëã²»±ä
+          state.voltage = rx.vol * 0.5f; // ï¿½ï¿½Ñ¹ï¿½ï¿½ï¿½ã²»ï¿½ï¿½
 
-          // ? ×ª×Ó¶Ë ¡ú Êä³ö¶Ë »»Ëã
+          // ? ×ªï¿½Ó¶ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
           state.torque = decode_torque(rx.torque);
           state.speed = decode_speed(rx.speed);
           state.pos = decode_position(rx.pos);

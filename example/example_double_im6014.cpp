@@ -1,36 +1,44 @@
 #include "unitree_im6014/im6014_motor.hpp"
+#include <atomic>
 #include <chrono>
+#include <csignal>
 #include <iostream>
 #include <thread>
 
-using namespace unitree::IM6014;
+std::atomic<bool> keep_running{true};
+void signal_handler(int signum) {
+  if (signum == SIGINT) {
+    keep_running.store(false);
+  }
+}
 
 int main() {
-  IM6014Motor motor;
-  // ÇëÌæ»»ÎªÊµ¼Ê´®¿ÚºÅ£¬²¨ÌØÂÊÖ§³Ö 4000000 »ò 6000000
-  if (!motor.init("/dev/ttyUSB0", 4000000)) {
+  unitree::IM6014::Motor motor;
+  // è¯·æ›¿æ¢ä¸ºå®é™…ä¸²å£å·ï¼Œæ³¢ç‰¹ç‡æ”¯æŒ 4000000 æˆ– 6000000
+  if (!motor.init("/dev/ttyUSB0", 6000000)) {
     std::cerr << "Failed to open serial port!" << std::endl;
     return -1;
   }
 
-  uint8_t id1 = 1, id2 = 2;
-  // PD ²ÎÊı (Êä³ö¶Ëµ¥Î»): Kp [Nm/rad], Kd [Nm/(rad/s)]
-  float kp = 0, kd = 0.25;
+  std::signal(SIGINT, signal_handler);
+
+  uint8_t id1 = 0, id2 = 1;
+  // PD gains: Kp [Nm/rad], Kd [Nm/(rad/s)]
+  float kp = 0, kd = 2.5;
 
   std::cout << "=== IM6014 Dual Motor Example (Output-end units) ==="
             << std::endl;
 
-  IM6014State s1, s2;
+  unitree::IM6014::State s1, s2;
   float t = 0.0;
-  while (true) {
-    // Ö±½ÓÊ¹ÓÃÊä³ö¶Ëµ¥Î»: Nm, rad/s, rad
-    motor.send_cmd(id1, 0.0, -0.2 * (1 - std::cos(0.5 * t)), 0, kp, kd, 1,
-                   1); // µç»ú1
-    motor.send_cmd(id2, 0.0, 0.1 * (1 - std::cos(0.5 * t)), 0, kp, kd, 1,
-                   1); // µç»ú2
+  while (keep_running.load()) {
+    motor.send_cmd(id1, 0.0, -0.5 * (1 - std::cos(3 * t)), 0, kp, kd, 1,
+                   0); // motor 0
+    motor.send_cmd(id2, 0.0, 1.5 * (1 - std::cos(2 * t)), 0, kp, kd, 1,
+                   0); // motor 1
 
-    motor.recv_state(id1, s1, 2);
-    motor.recv_state(id2, s2, 2);
+    motor.recv_state(id1, s1, 0);
+    motor.recv_state(id2, s2, 0);
 
     if (s1.valid && s2.valid) {
       std::cout << "\033c" << std::flush;
@@ -45,10 +53,13 @@ int main() {
     t += 0.002;
   }
 
-  // Í£»ú (status=0)
+  // Stop motors
+  std::cout << "\nCaught Ctrl+C, stopping motors..." << std::endl;
   motor.send_cmd(id1, 0, 0, 0, 0, 0, 0, 1);
   motor.send_cmd(id2, 0, 0, 0, 0, 0, 0, 1);
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
   motor.close();
-  std::cout << "Done." << std::endl;
+  std::cout << "Motors stopped." << std::endl;
   return 0;
 }

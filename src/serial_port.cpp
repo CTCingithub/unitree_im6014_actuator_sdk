@@ -5,9 +5,8 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
-#include <vector>
 
-// 手动定义 termios2 以避免与 <termios.h> 冲突
+// termios2 definition for custom baud rates
 struct termios2 {
   tcflag_t c_iflag;
   tcflag_t c_oflag;
@@ -32,6 +31,11 @@ bool SerialPort::open(const std::string &port, int baudrate) {
   if (fd_ == -1)
     return false;
 
+  // Clear non-blocking flag so VMIN/VTIME blocking reads take effect
+  int flags = fcntl(fd_, F_GETFL, 0);
+  if (flags >= 0)
+    fcntl(fd_, F_SETFL, flags & ~O_NONBLOCK);
+
   struct termios2 tio;
   if (ioctl(fd_, TCGETS2, &tio) < 0)
     return false;
@@ -46,8 +50,8 @@ bool SerialPort::open(const std::string &port, int baudrate) {
   tio.c_iflag &= ~(IXON | IXOFF | IXANY | INLCR | ICRNL);
   tio.c_oflag &= ~OPOST;
   tio.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-  tio.c_cc[VTIME] = 0;
-  tio.c_cc[VMIN] = 0;
+  tio.c_cc[VTIME] = 1;
+  tio.c_cc[VMIN] = 1;
 
   if (ioctl(fd_, TCSETS2, &tio) < 0)
     return false;

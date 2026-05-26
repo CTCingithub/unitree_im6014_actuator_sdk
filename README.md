@@ -16,3 +16,9 @@ cd <WorkSpace>
 sudo chmod +x Build.sh
 ./Build.sh
 ```
+
+## 3. Python API
+
+```bash
+pip install -e .
+```

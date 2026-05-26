@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unitree_im6014"
+version = "0.1.0"
+description = "Unitree IM6014 Actuator SDK Python Bindings"
+requires-python = ">=3.8"
+
+[tool.setuptools.packages.find]
+where = ["python"]

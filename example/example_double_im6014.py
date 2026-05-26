@@ -1,45 +1,76 @@
 #!/usr/bin/env python3
-import pyim6014
+"""Dual IM6014 motor velocity-control example â€” matches example_double_im6014.cpp."""
+
+import math
+import os
+import signal
+import sys
 import time
+
+try:
+    from unitree_im6014 import Motor, State
+except ModuleNotFoundError:
+    # Fallback: add the project's python/ directory to sys.path
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.join(_project_root, "python"))
+    from unitree_im6014 import Motor, State  # type: ignore[no-redef]
+
+keep_running = True
+
+
+def _on_sigint(_signum, _frame):
+    global keep_running
+    keep_running = False
 
 
 def main():
-    motor = pyim6014.IM6014Motor()
-    if not motor.init("/dev/ttyUSB0", 4000000):
-        print("Failed to open serial port!")
-        return
+    global keep_running
+    motor = Motor()
+    if not motor.init("/dev/ttyUSB0", 6000000):
+        print("Failed to open serial port!", file=sys.stderr)
+        return 1
 
-    kp, kd = 20.0, 1.0  # Êä³ö¶Ëµ¥Î»: Nm/rad, Nm/(rad/s)
+    signal.signal(signal.SIGINT, _on_sigint)
 
-    print("=== IM6014 Python Example (Output-end units) ===")
-    print("Motor 1: +3.0 rad, Motor 2: -1.5 rad")
+    id1, id2 = 0, 1
+    kp, kd = 0.0, 2.5
 
-    for i in range(150):
-        # Ö±½ÓÊ¹ÓÃÊä³ö¶Ëµ¥Î»
-        motor.send_cmd(1, 0.0, 0.0, 3.0, kp, kd)  # µç»ú1 ¡ú +3.0 rad
-        motor.send_cmd(2, 0.0, 0.0, -1.5, kp, kd)  # µç»ú2 ¡ú -1.5 rad
+    print("=== IM6014 Dual Motor Example (Output-end units) ===")
 
-        s1, s2 = pyim6014.IM6014State(), pyim6014.IM6014State()
-        motor.recv_state(1, s1)
-        motor.recv_state(2, s2)
+    s1, s2 = State(), State()
+    t = 0.0
+    while keep_running:
+        motor.send_cmd(id1, 0.0, -0.5 * (1 - math.cos(3 * t)), 0, kp, kd)
+        motor.send_cmd(id2, 0.0, 1.5 * (1 - math.cos(2 * t)), 0, kp, kd)
 
-        if s1.valid:
-            print(
-                f"[M1] pos={s1.pos:6.3f} rad, spd={s1.speed:6.3f} rad/s, tor={s1.torque:6.3f} Nm"
+        motor.recv_state(id1, s1, timeout_ms=0)
+        motor.recv_state(id2, s2, timeout_ms=0)
+
+        if s1.valid and s2.valid:
+            sys.stdout.write("\033c")
+            sys.stdout.write(
+                f"[M1] Pos: {s1.pos:.3f} rad, "
+                f"Spd: {s1.speed:.3f} rad/s, "
+                f"Tor: {s1.torque:.3f} Nm\n"
+                f"[M2] Pos: {s2.pos:.3f} rad, "
+                f"Spd: {s2.speed:.3f} rad/s, "
+                f"Tor: {s2.torque:.3f} Nm\n"
             )
-        if s2.valid:
-            print(
-                f"[M2] pos={s2.pos:6.3f} rad, spd={s2.speed:6.3f} rad/s, tor={s2.torque:6.3f} Nm"
-            )
+            sys.stdout.flush()
 
-        time.sleep(0.01)
+        time.sleep(0.002)
+        t += 0.002
 
-    # Í£»ú
-    motor.send_cmd(1, 0, 0, 0, 0, 0, 0, 1)
-    motor.send_cmd(2, 0, 0, 0, 0, 0, 0, 1)
+    # Stop motors
+    print("\nCaught Ctrl+C, stopping motors...")
+    motor.send_cmd(id1, 0, 0, 0, 0, 0, status=0)
+    motor.send_cmd(id2, 0, 0, 0, 0, 0, status=0)
+    time.sleep(1.0)
+
     motor.close()
-    print("Done.")
+    print("Motors stopped.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

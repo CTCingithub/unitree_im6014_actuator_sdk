@@ -1,4 +1,7 @@
 bin/
 build/
 lib/
+__pycache__/
 .clangd
+python/unitree_im6014/_native*.so
+*.egg-info/
