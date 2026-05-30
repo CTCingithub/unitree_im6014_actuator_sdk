@@ -12,6 +12,7 @@ public:
   void close();
   bool is_open() const;
   int write(const uint8_t *data, size_t length);
+  int write_all(const uint8_t *data, size_t length);
   int read(uint8_t *buffer, size_t max_length, int timeout_ms);
 
 private:

@@ -2,45 +2,45 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cmath>
 #include <iostream>
 #include <thread>
 
-std::atomic<bool> keep_running{true};
-void signal_handler(int signum) {
-  if (signum == SIGINT) {
-    keep_running.store(false);
-  }
-}
+using namespace unitree::IM6014;
+
+static std::atomic<bool> keep_running{true};
+
+static void on_sigint(int) { keep_running.store(false); }
 
 int main() {
-  unitree::IM6014::Motor motor;
-  // 请替换为实际串口号，波特率支持 4000000 或 6000000
+  Motor motor;
   if (!motor.init("/dev/ttyUSB0", 6000000)) {
     std::cerr << "Failed to open serial port!" << std::endl;
     return -1;
   }
 
-  std::signal(SIGINT, signal_handler);
+  std::signal(SIGINT, on_sigint);
 
-  uint8_t id1 = 0, id2 = 1;
-  // PD gains: Kp [Nm/rad], Kd [Nm/(rad/s)]
-  float kp = 0, kd = 2.5;
+  constexpr uint8_t id1 = 0, id2 = 1;
+  constexpr float kp = 0.0f, kd = 2.5f;
 
   std::cout << "=== IM6014 Dual Motor Example (Output-end units) ==="
             << std::endl;
 
-  unitree::IM6014::State s1, s2;
-  float t = 0.0;
+  State s1, s2;
+  float t = 0.0f;
   while (keep_running.load()) {
-    motor.send_cmd(id1, 0.0, -0.5 * (1 - std::cos(3 * t)), 0, kp, kd, 1,
-                   0); // motor 0
-    motor.send_cmd(id2, 0.0, 1.5 * (1 - std::cos(2 * t)), 0, kp, kd, 1,
-                   0); // motor 1
+    // Velocity control with sinusoidal trajectory (output-end units)
+    motor.send_cmd(id1, 0.0f,
+                   -0.5f * (1.0f - std::cos(3.0f * t)), 0.0f, kp, kd);
+    motor.send_cmd(id2, 0.0f,
+                    1.5f * (1.0f - std::cos(2.0f * t)), 0.0f, kp, kd);
 
-    motor.recv_state(id1, s1, 0);
-    motor.recv_state(id2, s2, 0);
+    motor.poll_states(2);
+    bool ok1 = motor.get_state(id1, s1);
+    bool ok2 = motor.get_state(id2, s2);
 
-    if (s1.valid && s2.valid) {
+    if (ok1 && ok2) {
       std::cout << "\033c" << std::flush;
       std::cout << "[M1] Pos: " << s1.pos << " rad, "
                 << "Spd: " << s1.speed << " rad/s, "
@@ -50,13 +50,13 @@ int main() {
                 << "Tor: " << s2.torque << " Nm" << std::endl;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    t += 0.002;
+    t += 0.002f;
   }
 
-  // Stop motors
+  // Graceful stop
   std::cout << "\nCaught Ctrl+C, stopping motors..." << std::endl;
-  motor.send_cmd(id1, 0, 0, 0, 0, 0, 0, 1);
-  motor.send_cmd(id2, 0, 0, 0, 0, 0, 0, 1);
+  motor.send_cmd(id1, 0, 0, 0, 0, 0, MotorStatus::DISABLE);
+  motor.send_cmd(id2, 0, 0, 0, 0, 0, MotorStatus::DISABLE);
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   motor.close();

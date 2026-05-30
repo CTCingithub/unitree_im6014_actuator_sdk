@@ -6,7 +6,7 @@ SDK for unitree IM6014 actuator.
 
 ```bash
 cd <WorkSpace>
-python Clangd_Setup.py -isystem/usr/include/python<Version>
+python Clangd_Setup.py -isystem/usr/include/python<Version> -isystem/usr/include/pybind11
 ```
 
 ## 2. Build
@@ -17,7 +17,7 @@ sudo chmod +x Build.sh
 ./Build.sh
 ```
 
-## 3. Python API
+## 3. Python Interface
 
 ```bash
 pip install -e .

@@ -10,7 +10,6 @@ import time
 try:
     from unitree_im6014 import Motor, State
 except ModuleNotFoundError:
-    # Fallback: add the project's python/ directory to sys.path
     _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, os.path.join(_project_root, "python"))
     from unitree_im6014 import Motor, State  # type: ignore[no-redef]
@@ -40,13 +39,15 @@ def main():
     s1, s2 = State(), State()
     t = 0.0
     while keep_running:
+        # Velocity control with sinusoidal trajectory (output-end units)
         motor.send_cmd(id1, 0.0, -0.5 * (1 - math.cos(3 * t)), 0, kp, kd)
         motor.send_cmd(id2, 0.0, 1.5 * (1 - math.cos(2 * t)), 0, kp, kd)
 
-        motor.recv_state(id1, s1, timeout_ms=0)
-        motor.recv_state(id2, s2, timeout_ms=0)
+        motor.poll_states(timeout_ms=2)
+        ok1 = motor.get_state(id1, s1)
+        ok2 = motor.get_state(id2, s2)
 
-        if s1.valid and s2.valid:
+        if ok1 and ok2:
             sys.stdout.write("\033c")
             sys.stdout.write(
                 f"[M1] Pos: {s1.pos:.3f} rad, "
@@ -61,7 +62,7 @@ def main():
         time.sleep(0.002)
         t += 0.002
 
-    # Stop motors
+    # Graceful stop
     print("\nCaught Ctrl+C, stopping motors...")
     motor.send_cmd(id1, 0, 0, 0, 0, 0, status=0)
     motor.send_cmd(id2, 0, 0, 0, 0, 0, status=0)
